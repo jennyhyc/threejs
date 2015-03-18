@@ -1,11 +1,3 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/gh-pages
-=======
-
->>>>>>> origin/gh-pages
 <!DOCTYPE html>
 <html>
 <head>
@@ -19,8 +11,6 @@
 </head>
 
 <body>
-<<<<<<< HEAD
-<<<<<<< HEAD
 
 <div id = "info"> 
      3W3D HW1<br/>
@@ -37,26 +27,6 @@ var cube;
 var controls;
 init();
 animate();
-=======
-=======
->>>>>>> origin/gh-pages
-<script src="js/three.min.js"></script>
-<script src="js/OrbitControls.js">
-</script>
-
-<script>
-
-var scene, renderer, camera;
-var cube;
-var controls;
-
-init();
-animate();
-
-<<<<<<< HEAD
->>>>>>> origin/gh-pages
-=======
->>>>>>> origin/gh-pages
 function init()
 {
 	renderer = new THREE.WebGLRenderer( {antialias:true} );
@@ -66,45 +36,16 @@ function init()
 	renderer.setClearColor (0x888888);
 	
 	document.body.appendChild (renderer.domElement);
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/gh-pages
-=======
-
->>>>>>> origin/gh-pages
 	scene = new THREE.Scene();
 	
 	cube = new THREE.Mesh (new THREE.BoxGeometry (20,5,8),
 							new THREE.MeshLambertMaterial ({color: 0x1ec876}));
-<<<<<<< HEAD
-<<<<<<< HEAD
 	cube.position.set (75, 0, 0);
 	scene.add (cube);
-=======
-=======
->>>>>>> origin/gh-pages
-
-	cube.position.set (75, 0, 0);
-	scene.add (cube);
-
-<<<<<<< HEAD
->>>>>>> origin/gh-pages
-=======
->>>>>>> origin/gh-pages
 	camera = new THREE.PerspectiveCamera (45, width/height, 1, 10000);
 	camera.position.y = 160;
 	camera.position.z = 400;
 	camera.lookAt (new THREE.Vector3(0,0,0));
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/gh-pages
-=======
-
->>>>>>> origin/gh-pages
 	controls = new THREE.OrbitControls (camera, renderer.domElement);
 	
 	// FLOOR
@@ -129,46 +70,18 @@ function init()
 	
 	window.addEventListener ('resize', onWindowResize, false);
 }
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/gh-pages
-=======
-
->>>>>>> origin/gh-pages
 function onWindowResize ()
 {
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
 	renderer.setSize (window.innerWidth, window.innerHeight);
 }
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/gh-pages
-=======
-
->>>>>>> origin/gh-pages
 function animate()
 {
 	controls.update();
 	requestAnimationFrame ( animate );  
 	renderer.render (scene, camera);
 }
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-
-
-
->>>>>>> origin/gh-pages
-=======
-
-
-
->>>>>>> origin/gh-pages
 </script>
 </body>
 

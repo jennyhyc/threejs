@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<style>
+	body {
+		margin: 0px;
+		overflow: hidden;
+		position: absolute;
+	}
+	#info {
+		position: fixed;
+		top: 5px; width: 100%;
+		font-family: Cursive;
+		font-size: 20px;
+		padding: 0px;
+		text-align: center;
+		color: #00cccc
+	}
+	strong {color: #88eeee}
+	a {color: #88eeee; font-weight: bold; text-decoration:underline}
+</style>
+</head>
+
+<body>
+
+<div id = "info"> 
+	 3W3D HW2<br>
+	 Door frame<br><br>
+	 <a href="javascript:toggle();">toggle</a>
+</div>
+
+<audio id="opening_door" style="display:none">
+<source src="sounds/doorOpening.mp3" type='audio/mp3'>
+</audio>
+<audio id="closing_door" style="display:none">
+<source src="sounds/doorClosing.mp3" type='audio/mp3'>
+</audio>
+<audio id="close_door" style="display:none">
+<source src="sounds/doorClose.mp3" type='audio/mp3'>
+</audio>
+
+
+
+<script src="js/three.min.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script type="text/javascript" src="js/dat.gui.min.js"></script>
+
+<script>
+
+var t=0;
+function toggle(){
+	t ^= 1;
+}
+
+
+var scene, camera, renderer;
+var controls;
+
+var height = 1000, width=500, side = 25;
+var gui, parameters;
+var door = new THREE.Object3D();
+var frame = new THREE.Object3D();
+
+var opening, closing, close;
+
+init();
+animate();
+
+function init() {
+	scene = new THREE.Scene();
+	
+	camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 );
+	camera.position.set (1000,1500,5000);
+	
+	renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x888888);
+		
+	document.body.appendChild( renderer.domElement );
+	
+	// sounds
+	opening = document.getElementById ('opening_door');
+	opening.pause();
+	closing = document.getElementById ('closing_door');
+	closing.pause();
+	close = document.getElementById ('close_door');
+	close.pause();
+	
+	
+	// material: door, frame, metal
+	THREE.ImageUtils.crossOrigin = '';
+    var texture = THREE.ImageUtils.loadTexture('images/door1.jpg');
+    var bumptex = THREE.ImageUtils.loadTexture('images/door1_bumptex.jpg');
+	var door1Material = new THREE.MeshPhongMaterial({
+        map: texture,
+        bumpMap: bumptex,
+        bumpScale: 10,
+        side: THREE.DoubleSide
+    });
+	var texture2 = THREE.ImageUtils.loadTexture('images/door2.jpg');
+    var bumptex2 = THREE.ImageUtils.loadTexture('images/door2_bumptex.jpg');
+	var door2Material = new THREE.MeshPhongMaterial({
+        map: texture2,
+        bumpMap: bumptex2,
+        bumpScale: 3,
+        side: THREE.DoubleSide
+    });
+	var bumptex3 = THREE.ImageUtils.loadTexture('images/door3_bumptex.jpg');
+	var door3Material = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        bumpMap: bumptex3,
+        bumpScale: 5,
+        side: THREE.DoubleSide
+    });
+	var doorMaterial = door2Material.clone();
+	
+	var frametexture = THREE.ImageUtils.loadTexture('images/doorframe.jpg');
+    var framebumptex = THREE.ImageUtils.loadTexture('images/doorframe_bumptex.jpg');
+	var Material = new THREE.MeshPhongMaterial({
+        map: frametexture,
+        //color: 0x123456,
+        bumpMap: framebumptex,
+        bumpScale: 3,
+        side: THREE.DoubleSide
+    });
+	
+	var gold =  new THREE.MeshPhongMaterial ({color: 0xc4920b, specular: 0xfada5f, shininess: 3});
+	var silver = new THREE.MeshPhongMaterial ({color:0x74777e, specular: 0xd8dbe2, shininess: 3});
+	var copper = new THREE.MeshPhongMaterial ({color: 0x673a23, specular: 0xedb38d, shininess: 3});
+	var metalMaterial = gold.clone();
+	
+	// frame: left, right, top, bottom
+	var left = new THREE.Mesh ( new THREE.BoxGeometry (side, height, side), Material);
+	left.position.set (0, height/2, 0);
+	frame.add(left);
+	var right = left.clone();
+	right.position.set (side+width ,height/2,0);
+	frame.add(right);
+	
+	var top = new THREE.Mesh ( new THREE.BoxGeometry (width+side*2, side, side), Material);
+	top.position.set ( (width+side)/2, height+side/2, 0);
+	frame.add(top);
+	var bottom = top.clone();
+	bottom.position.set ((width+side)/2, -side/2, 0);
+	frame.add(bottom);
+	
+	frame.position.set (side/2, side, -side/2);
+	scene.add (frame);
+	
+	// door: pivot*2, panel,doorknob*2 (base, middle, sphere)
+	var pivot = new THREE.Mesh ( new THREE.CylinderGeometry( side/8, side/8, height/20, 32 ), metalMaterial);
+	pivot.position.set (0, height/3, 0);
+	door.add(pivot);
+	var pivot2 = pivot.clone();
+	pivot2.position.set (0, -height/3, 0);
+	door.add(pivot2);
+	var panel = new THREE.Mesh ( new THREE.BoxGeometry (width, height, side), doorMaterial);
+	door.add(panel);
+	panel.position.set (-width/2, 0, -side/2-side/8);
+	
+	var doorknob = new THREE.Object3D();
+	var size = width/8;
+	var base = new THREE.Mesh ( new THREE.CylinderGeometry( size/4, size/2, size/10, 32 ), metalMaterial);
+	doorknob.add(base);
+	var middle = new THREE.Mesh ( new THREE.CylinderGeometry( size/6, size/6, size/5, 32 ), metalMaterial);
+	middle.position.set (0, size/10, 0);
+	doorknob.add(middle);
+	var sphere =  new THREE.Mesh ( new THREE.SphereGeometry( size/3.5, 32, 32 ), metalMaterial);
+	sphere.position.set (0, size/10+size/5+size/10, 0);
+	doorknob.add(sphere);
+	doorknob.rotation.x = Math.PI/2
+	doorknob.position.set (-width+side+size/2, 0, size/20-side/8);
+	door.add(doorknob);
+	
+	//var doorknob2 = doorknob.clone();
+	var doorknob2 = new THREE.Object3D();
+	var base2 = base.clone();	var middle2 = middle.clone();	var sphere2 = sphere.clone();
+	doorknob2.add(base2);
+	doorknob2.add(middle2);
+	doorknob2.add(sphere2);
+	doorknob2.rotation.x = -Math.PI/2;
+	doorknob2.position.set (-width+side+size/2, 0, -(size/20+side)-side/8 );
+	door.add(doorknob2);
+	
+	door.position.set (width+side, height/2+side, side/8);
+	scene.add (door);
+	
+	
+	// helper
+	var gridXZ = new THREE.GridHelper(2000, 100);
+	gridXZ.setColors( new THREE.Color(0xffffff), new THREE.Color(0xffffff) );
+	scene.add(gridXZ);
+	
+	var gridYZ = new THREE.GridHelper(2000, 100);
+	gridYZ.setColors( new THREE.Color(0xffffff), new THREE.Color(0xffffff) );
+	gridYZ.rotation.z =Math.PI/2;
+	//gridYZ.position.set (0, 1000, 0);
+	scene.add(gridYZ);
+	gridYZ.visible = false;
+	
+	var axisHelper = new THREE.AxisHelper( 2000 );
+	scene.add( axisHelper );
+	
+	var pointLight = new THREE.PointLight (0xffffff);
+	pointLight.position.set (-500, 1500, 1000);//(-1000,1500,1500);
+	scene.add (pointLight);
+	var sphereSize = 20;
+	var pointLightHelper = new THREE.PointLightHelper( pointLight, sphereSize );
+	scene.add( pointLightHelper );
+	pointLightHelper.visible = false;
+	
+	controls = new THREE.OrbitControls (camera, renderer.domElement);
+	window.addEventListener ('resize', onWindowResize, false);
+	
+	/////////
+	// GUI //
+	/////////
+	gui = new dat.GUI();
+	parameters = {
+		w: 500, h: 1000, s:25, color: "#ffffff",
+		door: "wood2", metal: "gold",
+		xz: true, yz: false, xyz: true, light: false
+	};
+	
+	// size
+	var folder = gui.addFolder('size');
+	var doorW = folder.add( parameters, 'w' ).min(300).max(2000).step(1).name('width').listen();
+	var doorH = folder.add( parameters, 'h' ).min(300).max(2000).step(1).name('height').listen();
+	var doorS = folder.add( parameters, 's' ).min(10).max(150).step(1).name('side').listen();
+	
+	doorW.onChange(function(value) { 
+		widthN = value;
+		door.scale.x = value/width;
+		door.position.x = value+side;
+		doorknob.scale.z = value/width;
+		doorknob.scale.y = value/width;
+		doorknob2.scale.z = value/width;
+		doorknob2.scale.y = value/width;
+		
+		top.scale.x = (value+2*side)/(width+2*side);
+		top.position.x = (value+side)/2;
+		bottom.scale.x = (value+2*side)/(width+2*side);
+		bottom.position.x = (value+side)/2;
+		right.position.x = value+side;
+		
+	});
+	doorH.onChange(function(value) {  
+		heightN = value;
+		//door.scale.y = value/height;
+		panel.scale.y = value/height;
+		pivot .scale.y = value/height;
+		pivot2.scale.y = value/height;
+		pivot.position.y = value/3;
+		pivot2.position.y = -value/3;
+		door.position.y = value/2+side;
+		
+		left.scale.y = value/height;
+		left.position.y = value/2;
+		right.scale.y = value/height;
+		right.position.y = value/2;
+		top.position.y = value;
+		
+	});
+	doorS.onChange(function(value){   
+		panel.scale.z = value/side;
+		panel.position.z = -value/2-side/8;
+		doorknob2.position.z = -value-side/4;
+		
+		frame.scale.z = value/side;
+		frame.position.z = -value/2;
+	});
+	folder.open();
+	
+	// style
+	var folder2 = gui.addFolder('style');
+	var doorMaterial = folder2.add( parameters, 'door', [ "wood1", "wood2","white wood" ] ).listen();
+	var metalMaterial = folder2.add( parameters, 'metal', [ "gold", "silver", "copper" ] ).listen();
+	var doorColor = folder2.addColor( parameters, 'color' ).name('paint').listen();
+	
+	doorMaterial.onChange(function(value) {
+		if (value == "wood1")	panel.material = door1Material.clone();
+		if (value == "wood2")	panel.material = door2Material.clone();
+		if (value == "white wood")	panel.material = door3Material.clone();
+	});
+	
+	/* Group(Object3D) can't change material */
+	metalMaterial.onChange(function(value) {
+		if (value == "gold"){
+			//m.material = gold.clone();
+			pivot.material = gold.clone();	pivot2.material = gold.clone();
+			base.material = gold.clone();	base2.material = gold.clone();
+			middle.material = gold.clone();	middle2.material = gold.clone();
+			sphere.material = gold.clone();	sphere2.material = gold.clone();
+		}
+		if (value == "silver"){
+			//m.material = silver.clone();
+			pivot.material = silver.clone();	pivot2.material = silver.clone();
+			base.material = silver.clone();		base2.material = silver.clone();
+			middle.material = silver.clone();	middle2.material = silver.clone();
+			sphere.material = silver.clone();	sphere2.material = silver.clone();
+		}
+		if (value == "copper"){
+			//m.material = copper.clone();
+			pivot.material = copper.clone();	pivot2.material = copper.clone();
+			base.material = copper.clone();		base2.material = copper.clone();
+			middle.material = copper.clone();	middle2.material = copper.clone();
+			sphere.material = copper.clone();	sphere2.material = copper.clone();
+		}
+	});
+	
+	doorColor.onChange(function(value){	
+		panel.material.color.setHex( value.replace("#", "0x") );  
+	});
+	folder2.open();
+	
+	var folder3 = gui.addFolder('helper');
+	var xzVisible = folder3.add( parameters, 'xz' ).name('gridXZ').listen();
+	var yzVisible = folder3.add( parameters, 'yz' ).name('gridYZ').listen();
+	var xyzVisible = folder3.add( parameters, 'xyz' ).name('axis').listen();
+	var lightVisible = folder3.add( parameters, 'light' ).name('light position').listen();
+	xzVisible.onChange(function(value){   
+		gridXZ.visible = value;  	});
+	yzVisible.onChange(function(value){
+		gridYZ.visible = value;  	});	
+	xyzVisible.onChange(function(value){
+		axisHelper.visible = value;  	});	
+	lightVisible.onChange(function(value) { 
+		pointLightHelper.visible = value;  	});
+	folder3.open();
+}
+
+function onWindowResize (){
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize (window.innerWidth, window.innerHeight);
+}
+
+var angle=0, ifopen=0;
+function animate() {
+	if (t){
+		if (angle<Math.PI/2) {
+			angle+=0.05;
+			closing.pause();
+			closing.load();
+			opening.play();
+			ifopen = 1;
+		}
+		else{
+			opening.pause();
+			opening.load();
+		}
+	}
+	if (!t){
+		if (angle>0){
+			angle-=0.05;
+			opening.pause();
+			closing.play();
+			opening.load();
+			//close.load();
+		}
+		else{
+			closing.pause();
+			closing.load();
+			if (ifopen == 1){
+				close.play();
+				ifopen = 0;
+			}
+			//console.log(angle);
+			
+		}
+	}
+	//close.pause();
+	//close.load();
+	
+	door.rotation.y = angle;
+
+	controls.update();
+	requestAnimationFrame( animate );
+	renderer.render( scene, camera );
+}
+
+</script>
+</body>
+</html>

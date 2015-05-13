@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<style>
+	#container {
+		width:70%;
+		float:left;
+		background-color:0x555555;
+	}
+	#cnvsFrame {
+		height: 0;
+		padding-bottom:50%;
+	}
+
+	#cnvsFrame1 {
+		width:70%;
+		float:left;
+	}
+	
+	#top {
+		width:100%;
+		padding:1%;
+		font-size: xx-large;
+		font-weight: bolder;
+		color: #345678;
+		text-align: center;
+	}
+	
+	body {
+		font-family: Cursive;
+		overflow: auto;
+		margin: 0px;
+		position: fixed;
+	}
+	#select {
+		width:28%;
+		padding:0.5%;
+		margin-right:0.5%;
+		float:right;
+		background-color: #123456;
+	}
+	.note {
+		
+		width: 100%;
+		padding-top:10%;
+	}
+	.but {
+		width: 18%;
+		border-style:outset;
+	}
+	
+	#nowInfo{
+		color: #ffffff;
+	}
+	#speedInfo{
+		color: #ffffff;
+	}
+	#storageInfo{
+		color: #ffffff;
+	}
+	#helperInfo{
+		color: #ffffff;
+	}
+	strong {
+		color: #88eeee;
+	}
+</style>
+</head>
+
+
+<body>
+<div id="top">Sheet Music</div>
+<div id="container">
+<div id="cnvsFrame" onmousemove="onDocumentMouseMove(event)" onmousedown="onDocumentMouseDown(event)">
+	<canvas id="cnvs"> </canvas>
+</div>
+</div>
+
+
+<div id="select">
+<strong>Notes</strong>  <div id="nowInfo"></div>
+<button type="button" class="but" onclick="javascript:chooseNote( 1);"><img class="note" src="images/note2.png"/></button>
+<button type="button" class="but" onclick="javascript:chooseNote( 2);"><img class="note" src="images/note4.png"/></button>
+<button type="button" class="but" onclick="javascript:chooseNote( 3);"><img class="note" src="images/note8.png"/></button>
+<button type="button" class="but" onclick="javascript:chooseNote(-1);"><img class="note" src="images/delete.png"/></button>
+<button type="button" class="but" onclick="javascript:chooseNote(-2);"><img class="note" src="images/clean.png"/></button>
+<br/><br/>
+<strong>Player</strong>  <div id="speedInfo"></div>
+<button type="button" class="but" onclick="javascript:player(2);"><img class="note" src="images/playerHead.png"/></button>
+<button type="button" class="but" onclick="javascript:player(3);"><img class="note" src="images/playerSlower.png"/></button>
+<button type="button" class="but" onclick="javascript:player(1);"><img class="note" src="images/playerPlay.png"/></button>
+<button type="button" class="but" onclick="javascript:player(4);"><img class="note" src="images/playerFaster.png"/></button>
+<button type="button" class="but" onclick="javascript:player(0);"><img class="note" src="images/playerStop.png"/></button>
+<br/><br/>
+<strong>Local Storage</strong> <div id="storageInfo"></div>
+<button type="button" class="but" onclick="javascript:localStorage(1);">save</button>
+<button type="button" class="but" onclick="javascript:localStorage(2);">load</button>
+<br/><br/>
+<form onclick="helper();">
+<strong>Grid-Helper</strong>
+<input name='help' type=checkbox value='0'></form>
+<br/>
+<strong>Information</strong><br/>
+<font color="#a8a8a8">
+<b><u>Notes</u></b> <br/>
+click the button to choose mode, then use mouse to add/delete notes on the sheet.<br/>
+trash icon means to clean the sheet.<br/>
+<b><u>Player</u></b> <br/>
+use the button to control the play-axis.<br/>
+<b><u>Grid-Helper</u></b> <br/>
+click the checkbox to show the grid.<br/>
+notes align the grid line.
+
+</font>
+</div>
+
+<script src="js/three.min.js"></script>
+<script src="js/OrbitControls.js"></script>
+
+<script>
+var scene, camera, renderer;
+var controls;
+var blank = 100;
+var plane, note=[0, "note2", "note4", "note8"], exLine, w, h, current=1;
+
+var raycaster;
+var mouse = new THREE.Vector2();
+var pickables = [];
+
+var noteObject = [], noteArray = [], ws=2400,hs=600;
+var playAxis, play=0;
+var clock = new THREE.Clock();
+var speed=60;	// beat/min
+
+var speedInfo, nowInfo, storageInfo, gridXZ ;
+var theTop, theCanvasFrame;
+init();
+animate();
+
+function helper(){
+	//plane.visible ^= 1;
+	if(plane.visible == false){
+		plane.visible = true;
+		gridXZ.visible = true;
+	}
+	else{
+		plane.visible = false;
+		gridXZ.visible = false;
+	}
+}
+
+function chooseNote(which) {
+	current = which;
+	if(current == -2){
+		console.log("clean  W= "+w+", H= ",h);
+		for(i=0; i<h; i++)
+			for(j=0; j<w; j++){
+				if(noteObject[i][j] != 0){
+					noteObject[i][j].visible = false;
+					noteObject[i][j] = 0;
+					noteArray[i][j] = 0;
+				}
+			}
+	}
+	//alert(current);
+}
+function player(which) {
+	play = which;
+	//alert(current);
+}
+
+function localStorage(mode){
+	if (mode == 1 ){
+		storageInfo.innerHTML = "save";
+		localStorage["noteArray"] = JSON.stringify(noteArray);
+		
+	}
+	//for(i=0; i<h; i++)
+	//	console.log(noteArray[i]);
+	else if (mode == 2){
+		chooseNote(-2);
+		noteArray = JSON.parse(localStorage["noteArray"]);
+		storageInfo.innerHTML = "load";
+		for(i=0; i<h; i++)
+			for(j=0; j<w; j++)
+				if (noteArray[i][j] > 0)
+					addNote(i,j,noteArray[i][j]);
+	}
+}
+
+function addNote(i,j,c){
+	if (noteObject[i][j] == 0){
+		noteObject[i][j] = note[c].clone();
+		noteObject[i][j].material.polygonOffsetUnits = -j*i;
+		noteObject[i][j].material.polygonOffsetFactor = -j*i;
+		console.log(noteObject[i][j]);
+		
+		if(i==0 || i==12){
+			var l = exLine.clone();
+			l.position.y -= blank*1.5;
+			noteObject[i][j].add(l);
+		}
+		noteObject[i][j].position.x = j * (blank*2) - ws;
+		noteObject[i][j].position.z = - (i * blank - hs);
+		if	(i<6){
+			noteObject[i][j].position.z -= blank*1.5;
+			noteObject[i][j].rotation.x = -Math.PI/2;
+		}
+		else{
+			noteObject[i][j].position.z += blank*1.5;
+			noteObject[i][j].rotation.x = Math.PI/2;
+		}
+		scene.add(noteObject[i][j]);
+		//noteArray[i][j] = current;
+	}
+
+}
+
+function init() {
+	nowInfo = window.document.getElementById('nowInfo');
+	speedInfo = window.document.getElementById('speedInfo');
+	storageInfo = window.document.getElementById('storageInfo');
+	storageInfo.innerHTML = "<br/>";
+	
+	var theCanvas = document.getElementById("cnvs");
+    theCanvasFrame = document.getElementById("cnvsFrame");
+	
+	theTop = document.getElementById("top");
+	
+	
+	//console.log(cnvsFrame.clientHeight);
+    renderer = new THREE.WebGLRenderer({
+        canvas: theCanvas,
+        antialias: true
+    });
+    var ww = theCanvasFrame.clientWidth;
+    var hh = theCanvasFrame.clientHeight;
+    renderer.setSize(ww, hh);
+    renderer.setClearColor(0xeeeeee);
+	
+	scene = new THREE.Scene();
+	camera = new THREE.PerspectiveCamera(45, ww/hh, 1, 10000);
+	//camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 );
+	camera.position.set (0,3500,0);
+	scene.add(camera);
+	
+	for (i=0; i<5; i++){
+		var line = new THREE.Mesh ( new THREE.BoxGeometry (5000,10,10), //PlaneGeometry(5000,10),
+									new THREE.MeshLambertMaterial ({color: 0x000000, 
+																	side: THREE.DoubleSide,
+																	polygonOffset: true,
+																    polygonOffsetUnits: 4.0,
+																    polygonOffsetFactor: 1.0/**/}) );
+		line.rotation.x = Math.PI/2;
+		line.position.set(0, 0, blank*2*(i-2));
+		scene.add(line);
+		
+	}
+	
+    plane = new THREE.Mesh( new THREE.PlaneGeometry(5000, 1300),
+							new THREE.MeshLambertMaterial({color: 0xffffff, 
+														   side: THREE.DoubleSide,
+														   polygonOffset: true,
+														   polygonOffsetUnits: 4.0,
+														   polygonOffsetFactor: 1.0}) );
+    plane.rotation.x = Math.PI / 2;
+    scene.add(plane);
+	plane.visible = false;
+	pickables = [plane];
+	
+	// noteObject
+	w=5000/(blank*2);
+	h=1300/blank;
+	for(i=0; i<h; i++){
+		var arr = [];		// must be new
+		for(j=0; j<w; j++)
+			arr[j] = 0;
+		noteObject[i] = arr;
+	}
+	for(i=0; i<h; i++){
+		var arr = [];		// must be new
+		for(j=0; j<w; j++)
+			arr[j] = 0;
+		noteArray[i] = arr;
+	}
+	
+	playAxis = new THREE.Mesh ( new THREE.BoxGeometry (30,30,1300),
+								new THREE.MeshLambertMaterial ({color: 0xaaaaaa}));
+	playAxis.position.set (-2400, 0, 0);
+	scene.add (playAxis);
+	
+	THREE.ImageUtils.crossOrigin = '';
+	var note2img = THREE.ImageUtils.loadTexture('images/note2.png');
+	var note4img = THREE.ImageUtils.loadTexture('images/note4.png');
+	var note8img = THREE.ImageUtils.loadTexture('images/note8.png');
+	
+	//note2img.rotation.z = Math.PI;
+	note[1] = new THREE.Mesh( new THREE.PlaneGeometry(blank*4,blank*4),//new THREE.SphereGeometry( blank/2, 32, 32 ), 
+							  new THREE.MeshLambertMaterial( {map: note2img,
+															  transparent: true, // for cut-out texture
+															  side: THREE.DoubleSide,
+															  polygonOffset: true/*,
+															  polygonOffsetUnits: 4.0,
+															  polygonOffsetFactor: 1.0*/} ) );
+
+	note[2] = new THREE.Mesh( new THREE.PlaneGeometry(blank*4,blank*4),//new THREE.SphereGeometry( blank/2, 32, 32 ), 
+							  new THREE.MeshLambertMaterial( {map: note4img,
+															  transparent: true, // for cut-out texture
+															  side: THREE.DoubleSide,
+															  polygonOffset: true/*,
+															  polygonOffsetUnits: 4.0,
+															  polygonOffsetFactor: 1.0*/} ) );
+	note[3] = new THREE.Mesh( new THREE.PlaneGeometry(blank*4,blank*4),//new THREE.SphereGeometry( blank/2, 32, 32 ), 
+							  new THREE.MeshLambertMaterial( {map: note8img,
+															  transparent: true, // for cut-out texture
+															  side: THREE.DoubleSide,
+															  polygonOffset: true/*,
+															  polygonOffsetUnits: 4.0,
+															  polygonOffsetFactor: 1.0*/} ) );
+	exLine = new THREE.Mesh ( new THREE.BoxGeometry (blank*2,10,10),//PlaneGeometry(blank*2,10),
+							  new THREE.MeshLambertMaterial ({color: 0x000000 }));
+	
+	gridXZ = new THREE.GridHelper(2600, blank*2);
+	gridXZ.setColors( new THREE.Color(0xeeeeee), new THREE.Color(0xeeeeee) );
+	scene.add(gridXZ);
+	gridXZ.visible = false;
+	/*
+	var pointLight = new THREE.PointLight (0xffffff);
+	pointLight.position.set (0,300,200);
+	scene.add (pointLight);
+	*/
+	var directionalLight = new THREE.DirectionalLight( 0xffffff, 0.7 );
+	directionalLight.position.set( 0, 5000, 100 );
+	scene.add( directionalLight );
+	
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    raycaster = new THREE.Raycaster();
+	window.addEventListener ('resize', onWindowResize, false);
+}
+function onWindowResize ()
+{
+	camera.aspect = cnvsFrame.clientWidth / cnvsFrame.clientHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize (cnvsFrame.clientWidth, cnvsFrame.clientHeight);
+}
+
+function onDocumentMouseDown(event) {
+
+    // PICKING DETAILS: 
+    // convert mouse.xy = [-1,1]^2 (NDC)
+    // unproject (mouse.xy, 1) to a point on the far plane (in world coordinate)
+    // set raycaster (origin, direction)
+    // find intersection objects, (closest first) 
+    // each record as
+    // [ { distance, point, face, faceIndex, object }, ... ]
+	//console.log(theTop.clientHeight);
+    event.preventDefault();
+
+	mouse.x =  ( (event.clientX - theCanvasFrame.offsetLeft) / cnvsFrame.clientWidth) * 2 - 1;
+	mouse.y = -( (event.clientY - theCanvasFrame.offsetTop)  / cnvsFrame.clientHeight )  * 2 + 1;
+	//mouse.y = -( (event.clientY- theTop.clientHeight) / cnvsFrame.clientHeight )  * 2 + 1;
+	
+    // find intersections
+    var vector = new THREE.Vector3(mouse.x, mouse.y, 1).unproject(camera);
+    raycaster.set(camera.position, vector.sub(camera.position).normalize());
+    var intersects = raycaster.intersectObjects(pickables);
+    if (intersects.length > 0) {
+        //debugger;
+		var move = intersects[0].point;
+		move.set (Math.round(move.x/blank/2)*blank*2, Math.round(move.y/blank)*blank, Math.round(move.z/blank)*blank);
+        var a = (move.x + ws) / (blank*2);
+		var b = -(move.z - hs) / blank;
+		if (current == -1){
+			console.log("delete");
+			noteObject[b][a].visible = false;
+			noteObject[b][a] = 0;
+			noteArray[b][a] = 0;
+		}
+		else if (current > 0){
+			if (noteObject[b][a] == 0){
+				addNote(b,a,current);
+				noteArray[b][a] = current;
+			}
+		}
+		
+		/*console.log(move);
+		console.log("a= "+a+", b= "+b);
+		console.log(noteArray[b][a]);*/
+    }
+
+}
+
+function onDocumentMouseMove(event) {
+    event.preventDefault();
+	
+	mouse.x =  ( (event.clientX - theCanvasFrame.offsetLeft) / cnvsFrame.clientWidth) * 2 - 1;
+	mouse.y = -( (event.clientY - theCanvasFrame.offsetTop)  / cnvsFrame.clientHeight )  * 2 + 1;
+	//mouse.y = -( (event.clientY- theTop.clientHeight) / cnvsFrame.clientHeight )  * 2 + 1;
+	
+    var vector = new THREE.Vector3(mouse.x, mouse.y, 1).unproject(camera);
+    raycaster.set(camera.position, vector.sub(camera.position).normalize());
+    var intersects = raycaster.intersectObjects(pickables);
+
+    if (intersects.length > 0) {
+        document.body.style.cursor = 'pointer';
+    } else {
+        document.body.style.cursor = 'auto';
+    }
+}
+var sum = 0;
+function animate() {
+	var dt = clock.getDelta();
+	sum+=dt;
+	if( playAxis.position.x > ws){
+		playAxis.position.x = -ws;
+		sum = 0;
+	}
+	
+	if(play == 1)
+		playAxis.position.x += blank*2/(60/speed)*dt;
+	else if(play == 2)
+		playAxis.position.set (-2400, 0, 0);
+	else if(play == 3){
+		if(speed > 40)
+			speed -= 5;
+		play=1;
+	}
+	else if(play == 4){
+		if(speed <120)
+			speed += 5;
+		play=1;
+	}
+	speedInfo.innerHTML = "Speed: " + speed;
+	
+	if(current == 1)
+		nowInfo.innerHTML = "Add Half Note";
+	else if(current == 2)
+		nowInfo.innerHTML = "Add Quarter Note";
+	else if(current == 3)
+		nowInfo.innerHTML = "Add Eighth Note";
+	else if(current == -1)
+		nowInfo.innerHTML = "Delete Note";
+	else if(current == -2)
+		nowInfo.innerHTML = "Clean Notes";
+	
+	controls.update();
+	
+	requestAnimationFrame( animate );
+	renderer.render( scene, camera );
+}
+</script>
+
+</body>
+</html>

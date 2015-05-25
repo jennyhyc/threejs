@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+#info {
+	position: fixed;
+	top: 5px; width: 100%;
+	font-family: Cursive;
+	font-size: 20px;
+	padding: 0px;
+	text-align: center;
+	color: #00cccc
+}
+#nowInfo{
+	color: #ffffff;
+}
+body {
+		margin: 0px;
+		position: fixed;
+	}
+strong {color: #88eeee}
+</style>
+<head>
+
+<body>
+<div id="info"><strong>HW6 Character animation</strong><br/>
+	<strong>A/S</strong>: increase/decrease a line<br/>
+	<strong>up/down</strong>: fps
+	<strong>left/right</strong>: angel<br/>
+	<button type="button" onclick="javascript:select(1);">switch mode</button>
+	<div id="nowInfo"></div>
+</div>
+<script src="js/three.min.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/KeyboardState.js"></script>
+<script src="js/Stats.js"></script>
+
+<script id="myVertexShader" type="x-shader/x-vertex">
+    varying vec2 vUv;
+    void main() {
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vUv = uv;
+    }
+</script>
+<script id="myFragmentShader" type="x-shader/x-fragment">
+    uniform sampler2D texture;
+    varying vec2 vUv;
+
+    void main() {
+        vec4 color = texture2D(texture, vUv);
+        if (color.b > 0.85 && color.r < 0.2) discard;
+        else gl_FragColor = vec4(.2, .2, .2, 0.) + color;
+    }
+</script>
+<script type="x-shader/x-fragment" id="fragmentShaderDepth">
+    uniform sampler2D texture;
+    varying vec2 vUv;
+
+    vec4 pack_depth(const in float depth) {
+        const vec4 bit_shift = vec4(256.0 * 256.0 * 256.0, 256.0 * 256.0, 256.0, 1.0);
+        const vec4 bit_mask = vec4(0.0, 1.0 / 256.0, 1.0 / 256.0, 1.0 / 256.0);
+        vec4 res = fract(depth * bit_shift);
+        res -= res.xxyz * bit_mask;
+        return res;
+    }
+
+    void main() {
+        vec4 pixel = texture2D(texture, vUv);
+        if (pixel.b > 0.85 && pixel.r < 0.2) discard;
+        gl_FragData[0] = pack_depth(gl_FragCoord.z);
+    }
+</script>
+
+<script>
+var camera, scene, renderer, light, controls;
+var sceneRTT, rtTexture, mesh, quad, quadij=[], side=5, blank=50;
+var speed = 10, angle = 0, pos = new THREE.Vector3(0,0,0);
+var clock = new THREE.Clock();
+var keyboard = new KeyboardState();
+var mode=0, nowInfo;
+
+function select(m){
+	
+	mode ^= m;
+	//alert(mode);
+	clearArmy();
+	initModel();
+}
+
+init();
+animate();
+
+function initModel(){
+
+if(mode == 1){
+	nowInfo.innerHTML = 'Now: Render to Texture';
+    sceneRTT = new THREE.Scene();
+    light = new THREE.PointLight(0xffffff);
+    light.position.set(0, 300, 200);
+    sceneRTT.add(light);
+
+    rtTexture = new THREE.WebGLRenderTarget(
+    window.innerWidth, window.innerHeight, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.NearestFilter,
+        format: THREE.RGBFormat
+    });
+
+    var jsonLoader = new THREE.JSONLoader();
+    jsonLoader.load('models/KNUCKLES.js', function (geometry, mat) {
+		geometry.computeMorphNormals();
+
+		var mat = new THREE.MeshBasicMaterial(
+				{
+					map: THREE.ImageUtils.loadTexture("models/KNUCKLES.png"),
+					morphTargets: true, morphNormals: true
+				});
+
+		mesh = new THREE.MorphAnimMesh(geometry, mat);
+		
+		mesh.rotation.y = Math.PI/2;
+		mesh.parseAnimations();
+
+		mesh.playAnimation('og', speed);
+		mesh.scale.set(3, 3, 3);
+		//mesh.position.set(0,5,0);
+        sceneRTT.add(mesh);
+    });
+	//////////////////////////////////////////////////
+    var plane = new THREE.PlaneBufferGeometry(150, 150);
+    rttmaterial = new THREE.ShaderMaterial({
+        side: THREE.DoubleSide,
+        uniforms: {
+            texture: {
+                type: "t",
+                value: rtTexture
+            }
+        },
+        vertexShader: document.getElementById('myVertexShader').textContent,
+        fragmentShader: document.getElementById('myFragmentShader').textContent
+    });
+    quad = new THREE.Mesh(plane, rttmaterial);
+    //quad.position.set(0, 20, 0);
+    //scene.add(quad);
+	
+	
+    //////////////////////////////////////////////////////////////////////////
+    // shadowing ///////////////
+	quad.castShadow = true;
+	quad.receiveShadow = true;
+    quad.customDepthMaterial = new THREE.ShaderMaterial({
+        side: THREE.DoubleSide,
+        uniforms: {
+            texture: {
+                type: 't',
+                value: rtTexture
+            }
+        },
+        vertexShader: document.getElementById('myVertexShader').textContent,
+        fragmentShader: document.getElementById('fragmentShaderDepth').textContent
+    });
+	
+	RTTsetArmy();
+}
+else{
+	nowInfo.innerHTML = 'Now: Polygon Model';
+	LMDsetArmy();
+}
+}
+
+function init() {
+	nowInfo = window.document.getElementById('nowInfo');
+
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.top = '0px';
+	stats.domElement.style.zIndex = 100;
+	document.body.appendChild( stats.domElement );	
+	
+    ///////////////////////////////////////////////////////////////////////////
+    scene = new THREE.Scene();
+    renderer = new THREE.WebGLRenderer({
+        antialias: true
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x888888);
+
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+    camera.position.set(0,200,500);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    var ambientLight = new THREE.AmbientLight(0x555555);
+    scene.add(ambientLight);
+
+    document.body.appendChild(renderer.domElement);
+
+    
+    renderer.shadowMapEnabled = true;
+    renderer.shadowMapType = THREE.PCFShadowMap;
+	
+    spotLight = new THREE.SpotLight(0xffffff, 1);
+    spotLight.position.set(0, 1000, 1500);
+    spotLight.angle = Math.PI / 3;
+    spotLight.castShadow = true;
+    spotLight.shadowMapWidth = 1024;
+    spotLight.shadowMapHeight = 1024;
+    spotLight.shadowCameraNear = 5;
+    spotLight.shadowCameraFar = 4000;
+    spotLight.shadowCameraFov = spotLight.angle / Math.PI * 180;
+    spotLight.exponent = 20;
+    scene.add(spotLight);
+	
+	var SpotLightHelper = new THREE.SpotLightHelper( spotLight );
+	scene.add( SpotLightHelper );
+	//SpotLightHelper.visible = false;
+	
+	var directionalLight = new THREE.DirectionalLight( 0xffffff, 0.8 );
+	//directionalLight.position.set( 0, 1000, 1500 );
+	scene.add( directionalLight );
+	
+	// floor
+	var FloorTexture = THREE.ImageUtils.loadTexture('images/grass.jpg');
+	var FloorBumptex = THREE.ImageUtils.loadTexture('images/grass_bumptex.jpg');
+	FloorTexture.wrapS = FloorTexture.wrapT = THREE.RepeatWrapping; 
+	FloorBumptex.wrapS = FloorBumptex.wrapT = THREE.RepeatWrapping; 
+	FloorTexture.repeat.set( 5, 5 );
+	FloorBumptex.repeat.set( 5, 5 );
+	var floor = new THREE.Mesh( new THREE.PlaneGeometry( 1000, 1000, 1, 1 ), 
+								 new THREE.MeshPhongMaterial( { map: FloorTexture, 
+																bumpMap: FloorBumptex, 
+																bumpScale:20, 
+																side: THREE.DoubleSide} ) );
+	floor.rotation.x = -Math.PI/2;
+	floor.receiveShadow = true;
+	floor.castShadow = true;
+	scene.add( floor );
+	
+	initModel();
+	
+	window.addEventListener ('resize', onWindowResize, false);
+}
+function onWindowResize()
+{
+	camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+	renderer.setSize (window.innerWidth, window.innerHeight);
+}
+function LMDsetArmy(){
+	for (i=0; i<side; i++){
+		var arr = [];
+		quadij[i] = arr;
+	}
+	
+	for(i=0; i<side; i++)
+		for(j=0; j<side; j++)
+			loadModel(i,j);
+}
+function loadModel(i,j){
+	var jsonLoader = new THREE.JSONLoader();
+    jsonLoader.load('models/KNUCKLES.js', function (geometry, mat) {
+		geometry.computeMorphNormals();
+
+		var mat = new THREE.MeshBasicMaterial(
+				{
+					map: THREE.ImageUtils.loadTexture("models/KNUCKLES.png"),
+					morphTargets: true, morphNormals: true
+				});
+
+		quadij[i][j] = new THREE.MorphAnimMesh(geometry, mat);
+		quadij[i][j].parseAnimations();
+		
+		quadij[i][j].castShadow = true;
+		quadij[i][j].receiveShadow = true;
+		
+		quadij[i][j].playAnimation('og', speed);
+		quadij[i][j].position.set (blank*(i-Math.floor(side/2))+pos.x,0,blank*(j-Math.floor(side/2))+pos.z);
+        scene.add(quadij[i][j]);
+    });
+}
+function RTTsetArmy(){
+	for (i=0; i<side; i++){
+		var arr = [];
+		quadij[i] = arr;
+	}
+	
+	for (i=0; i<side; i++)
+        for (j=0; j<side; j++) {
+            quadij[i][j] = quad.clone();
+			quadij[i][j].customDepthMaterial = quad.customDepthMaterial;
+            quadij[i][j].position.set (blank*(i-Math.floor(side/2))+pos.x,0,blank*(j-Math.floor(side/2))+pos.z);
+            scene.add (quadij[i][j]);
+        }
+}
+function clearArmy(){
+	for (i=0; i<side; i++)
+        for (j=0; j<side; j++){
+			quadij[i][j].visible = false;
+			quadij[i][j] = 0;
+		}
+		
+}
+
+function update(){
+	keyboard.update();
+	if ( keyboard.pressed("left"))
+		angle += 0.03;               
+	if ( keyboard.pressed("right"))
+		angle -= 0.03;               
+	if ( keyboard.pressed("up")){
+		speed += 0.5;
+		if( mode == 1 )
+			mesh.playAnimation('og', speed);
+		else{
+			for(i=0; i<side; i++)
+				for(j=0; j<side; j++)
+					quadij[i][j].playAnimation('og', speed);
+		}
+	}
+	if ( keyboard.pressed("down")){
+		speed -= 0.5;
+		if (speed>0){
+			if( mode == 1 )
+				mesh.playAnimation('og', speed);
+			else
+				for(i=0; i<side; i++)
+					for(j=0; j<side; j++)
+						quadij[i][j].playAnimation('og', speed);
+		}
+		else{
+			if( mode == 1 )
+				mesh.playAnimation('og', -speed);
+			else
+				for(i=0; i<side; i++)
+					for(j=0; j<side; j++)
+						quadij[i][j].playAnimation('og', -speed);
+		}
+	}
+	if ( keyboard.pressed("space") ){
+		speed = 0;
+		if( mode == 1 )
+			mesh.playAnimation('og', speed);
+		else
+			for(i=0; i<side; i++)
+				for(j=0; j<side; j++)
+					quadij[i][j].playAnimation('og', speed);
+	}
+	if ( keyboard.down("A") ){
+		if(side<20){
+			clearArmy();
+			side++;
+			if( mode == 1 )
+				RTTsetArmy();
+			else
+				LMDsetArmy();
+		}
+	}
+	if ( keyboard.down("S") ){
+		if(side>1){
+			clearArmy();
+			side--;
+			if( mode == 1 )
+				RTTsetArmy();
+			else
+				LMDsetArmy();
+		}
+	}
+		
+}
+
+function animate() {
+    controls.update();
+	stats.update();
+	update();
+	
+	var delta = clock.getDelta();
+	var dir = new THREE.Vector3(-1,0,0);
+	dir.multiplyScalar (delta*speed);
+	dir.applyAxisAngle (new THREE.Vector3(0,1,0), angle);
+//	pos.add (dir);  //pos = pos + dir;
+	
+if( mode == 1 ){	
+	for (i=0; i<side; i++)
+        for (j=0; j<side; j++){
+			rotateBillboard(quadij[i][j]);
+//			quadij[i][j].position.add (dir);
+	}
+	
+	if (mesh) {
+		mesh.updateAnimation(delta * 1000);
+		mesh.rotation.y = angle;
+	}
+}
+
+else{
+	for(i=0; i<side; i++)
+		for(j=0; j<side; j++)
+			if (quadij[i][j]) {
+				quadij[i][j].updateAnimation(delta * 1000);
+				quadij[i][j].rotation.y = angle;
+				//quadij[i][j].playAnimation('og', speed);
+				//mesh.position.z+=0.01;
+			}
+}
+    requestAnimationFrame(animate);
+    render();
+}
+
+function render() {
+if( mode == 1 ){
+    renderer.setClearColor(0x0000ff);
+    renderer.render(sceneRTT, camera, rtTexture, true);
+}
+    renderer.setClearColor(0x888888);
+    renderer.render(scene, camera);
+
+}
+
+function rotateBillboard (mesh)
+{
+    var b = mesh.position.clone();  // billboard location
+    var rotaxis = new THREE.Vector3();
+    var v, yhat, n;
+    
+    v = camera.position.clone(); // clone the camera position
+    yhat = new THREE.Vector3(0, 1, 0); // up
+    n = new THREE.Vector3(0, 0, 1); // billboard normal
+
+    v.subVectors(v, b); // v-b
+    v.sub(yhat.clone().multiplyScalar(v.dot(yhat)));
+    v.normalize(); // pxz
+
+    rotangle = Math.acos(v.dot(n));
+    rotaxis.crossVectors(n, v);
+    if (rotaxis.dot(yhat) < 0) rotangle *= -1;
+
+    mesh.rotation.y = rotangle;
+}
+</script>
+</body>
+</html>
